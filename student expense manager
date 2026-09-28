@@ -1,0 +1,479 @@
+import json
+import os
+from datetime import datetime
+
+# ==========================================
+# CONFIGURATION & CONSTANTS
+# ==========================================
+DATA_FILE = "expenses.json"
+LOG_FILE = "activity.log"
+
+CATEGORIES = [
+    "Food",
+    "Transport",
+    "Rent",
+    "Utilities",
+    "Entertainment",
+    "Education",
+    "Health",
+    "Shopping",
+    "Other"
+]
+
+MONTHLY_BUDGET_LIMIT = 10000.0
+
+
+# ==========================================
+# LOGGER
+# ==========================================
+def log_action(action, details=""):
+    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    log_entry = f"[{timestamp}] {action}"
+    if details != "":
+        log_entry = log_entry + f" - {details}"
+
+    try:
+        with open(LOG_FILE, "a") as file:
+            file.write(log_entry + "\n")
+        return True
+    except Exception:
+        return False
+
+
+# ==========================================
+# UTILS & FORMATTING
+# ==========================================
+def print_header(title):
+    print("\n" + "=" * 50)
+    print(title.center(50))
+    print("=" * 50)
+
+
+def print_expense_row(expense):
+    print(
+        f"ID: {expense['id']:<4} | "
+        f"Date: {expense['date']:<12} | "
+        f"Category: {expense['category']:<14} | "
+        f"Amount: Rs.{expense['amount']:<10.2f} | "
+        f"Note: {expense['note']}"
+    )
+
+
+def sort_strings_ascending(items):
+    result = items.copy()
+    n = len(result)
+    for i in range(n):
+        for j in range(0, n - i - 1):
+            if result[j] > result[j + 1]:
+                temp = result[j]
+                result[j] = result[j + 1]
+                result[j + 1] = temp
+    return result
+
+
+# ==========================================
+# VALIDATORS
+# ==========================================
+def is_valid_amount(amount_str):
+    try:
+        val = float(amount_str)
+        return val > 0
+    except ValueError:
+        return False
+
+
+def is_valid_date(date_str):
+    try:
+        datetime.strptime(date_str, "%Y-%m-%d")
+        return True
+    except ValueError:
+        return False
+
+
+def is_valid_category(category_str):
+    return category_str in CATEGORIES
+
+
+def is_non_empty(text):
+    return len(text.strip()) > 0
+
+
+# ==========================================
+# FILE HANDLER
+# ==========================================
+def load_expenses():
+    if not os.path.exists(DATA_FILE):
+        return []
+
+    try:
+        with open(DATA_FILE, "r") as file:
+            data = json.load(file)
+            return data
+    except Exception:
+        print("Warning: Could not read data file. Starting fresh.")
+        return []
+
+
+def save_expenses(expenses_list):
+    try:
+        with open(DATA_FILE, "w") as file:
+            json.dump(expenses_list, file, indent=4)
+        return True
+    except Exception:
+        print("Error: Failed to save expenses.")
+        return False
+
+
+# ==========================================
+# EXPENSE MANAGER (CRUD)
+# ==========================================
+def add_expense(expenses_list, date, category, amount, note):
+    new_id = 1
+    if len(expenses_list) > 0:
+        max_id = expenses_list[0]['id']
+        for exp in expenses_list:
+            if exp['id'] > max_id:
+                max_id = exp['id']
+        new_id = max_id + 1
+        
+    new_exp = {
+        'id': new_id,
+        'date': date,
+        'category': category,
+        'amount': float(amount),
+        'note': note
+    }
+    
+    expenses_list.append(new_exp)
+    return new_exp
+
+
+def view_all_expenses(expenses_list):
+    if len(expenses_list) == 0:
+        print("No expenses found.")
+        return
+        
+    for exp in expenses_list:
+        print(f"ID: {exp['id']} | Date: {exp['date']} | Cat: {exp['category']} | Amt: Rs.{exp['amount']} | Note: {exp['note']}")
+
+
+def find_expense_by_id(expenses_list, exp_id):
+    for exp in expenses_list:
+        if exp['id'] == exp_id:
+            return exp
+    return None
+
+
+def edit_expense(expenses_list, exp_id, date, category, amount, note):
+    exp = find_expense_by_id(expenses_list, exp_id)
+    if exp is None:
+        return False
+        
+    if date is not None:
+        exp['date'] = date
+    if category is not None:
+        exp['category'] = category
+    if amount is not None:
+        exp['amount'] = float(amount)
+    if note is not None:
+        exp['note'] = note
+        
+    return True
+
+
+def delete_expense(expenses_list, exp_id):
+    for i in range(len(expenses_list)):
+        if expenses_list[i]['id'] == exp_id:
+            expenses_list.pop(i)
+            return True
+    return False
+
+
+# ==========================================
+# ANALYTICS & REPORTS
+# ==========================================
+def total_spent(expenses_list):
+    total = 0.0
+    for exp in expenses_list:
+        total = total + exp['amount']
+    return total
+
+
+def average_expense(expenses_list):
+    if len(expenses_list) == 0:
+        return 0.0
+    total = total_spent(expenses_list)
+    return total / len(expenses_list)
+
+
+def highest_expense(expenses_list):
+    if len(expenses_list) == 0:
+        return None
+        
+    highest = expenses_list[0]
+    for exp in expenses_list:
+        if exp['amount'] > highest['amount']:
+            highest = exp
+    return highest
+
+
+def lowest_expense(expenses_list):
+    if len(expenses_list) == 0:
+        return None
+        
+    lowest = expenses_list[0]
+    for exp in expenses_list:
+        if exp['amount'] < lowest['amount']:
+            lowest = exp
+    return lowest
+
+
+def category_wise_summary(expenses_list):
+    summary = {}
+    for exp in expenses_list:
+        cat = exp['category']
+        amt = exp['amount']
+        
+        if cat in summary:
+            summary[cat] = summary[cat] + amt
+        else:
+            summary[cat] = amt
+            
+    return summary
+
+
+def monthly_summary(expenses_list):
+    summary = {}
+    for exp in expenses_list:
+        month = exp['date'][0:7]
+        amt = exp['amount']
+        
+        if month in summary:
+            summary[month] = summary[month] + amt
+        else:
+            summary[month] = amt
+            
+    return summary
+
+
+def budget_alert(expenses_list, current_month):
+    budget_limit = MONTHLY_BUDGET_LIMIT
+    month_totals = monthly_summary(expenses_list)
+    
+    spent = 0.0
+    if current_month in month_totals:
+        spent = month_totals[current_month]
+        
+    over_limit = False
+    if spent > budget_limit:
+        over_limit = True
+        
+    return spent, over_limit
+
+
+def top_n_expenses(expenses_list, n):
+    top_expenses = []
+    temp_list = list(expenses_list)
+    
+    count = n
+    if len(temp_list) < n:
+        count = len(temp_list)
+        
+    for _ in range(count):
+        highest = temp_list[0]
+        highest_index = 0
+        
+        for j in range(1, len(temp_list)):
+            if temp_list[j]['amount'] > highest['amount']:
+                highest = temp_list[j]
+                highest_index = j
+                
+        top_expenses.append(highest)
+        temp_list.pop(highest_index)
+        
+    return top_expenses
+
+
+# ==========================================
+# CLI INTERFACE & MAIN LOOP
+# ==========================================
+def prompt_expense_details():
+    date = input("Enter date (YYYY-MM-DD), or press Enter for today: ").strip()
+    if date == "":
+        date = datetime.today().strftime("%Y-%m-%d")
+    while not is_valid_date(date):
+        date = input("Invalid date. Enter date as YYYY-MM-DD: ").strip()
+
+    print("Categories:", ", ".join(CATEGORIES))
+    category = input("Enter category: ").strip()
+    while not is_valid_category(category):
+        category = input("Invalid category. Choose from the list above: ").strip()
+
+    amount = input("Enter amount (Rs.): ").strip()
+    while not is_valid_amount(amount):
+        amount = input("Invalid amount. Enter a positive number: ").strip()
+
+    note = input("Enter a short note (optional): ").strip()
+
+    return date, category, amount, note
+
+
+def handle_add(expenses):
+    print_header("ADD NEW EXPENSE")
+    date, category, amount, note = prompt_expense_details()
+    new_expense = add_expense(expenses, date, category, amount, note)
+    save_expenses(expenses)
+    log_action("ADD", f"id={new_expense['id']} category={new_expense['category']} amount={new_expense['amount']}")
+    print(f"\nExpense added successfully with ID {new_expense['id']}.")
+
+
+def handle_view(expenses):
+    print_header("ALL EXPENSES")
+    view_all_expenses(expenses)
+
+
+def handle_edit(expenses):
+    print_header("EDIT EXPENSE")
+    view_all_expenses(expenses)
+    if not expenses:
+        return
+
+    try:
+        expense_id = int(input("\nEnter the ID of the expense to edit: "))
+    except ValueError:
+        print("Invalid ID.")
+        return
+
+    if find_expense_by_id(expenses, expense_id) is None:
+        print("No expense found with that ID.")
+        return
+
+    print("Leave a field blank to keep it unchanged.")
+    date = input("New date (YYYY-MM-DD): ").strip()
+    while date and not is_valid_date(date):
+        date = input("Invalid date. Try again (or leave blank): ").strip()
+
+    category = input("New category: ").strip()
+    while category and not is_valid_category(category):
+        category = input("Invalid category. Try again (or leave blank): ").strip()
+
+    amount = input("New amount: ").strip()
+    while amount and not is_valid_amount(amount):
+        amount = input("Invalid amount. Try again (or leave blank): ").strip()
+
+    note = input("New note: ").strip()
+
+    if date == "":
+        date = None
+    if category == "":
+        category = None
+    if amount == "":
+        amount = None
+    if note == "":
+        note = None
+
+    updated = edit_expense(expenses, expense_id, date, category, amount, note)
+    if updated:
+        save_expenses(expenses)
+        log_action("EDIT", f"id={expense_id}")
+        print("Expense updated successfully.")
+
+
+def handle_delete(expenses):
+    print_header("DELETE EXPENSE")
+    view_all_expenses(expenses)
+    if not expenses:
+        return
+
+    try:
+        expense_id = int(input("\nEnter the ID of the expense to delete: "))
+    except ValueError:
+        print("Invalid ID.")
+        return
+
+    if delete_expense(expenses, expense_id):
+        save_expenses(expenses)
+        log_action("DELETE", f"id={expense_id}")
+        print("Expense deleted successfully.")
+    else:
+        print("No expense found with that ID.")
+
+
+def handle_reports(expenses):
+    print_header("ANALYTICS & REPORTS")
+    if not expenses:
+        print("No data available yet. Add some expenses first.")
+        return
+
+    print(f"Total spent overall: Rs.{total_spent(expenses):.2f}")
+    print(f"Average per transaction: Rs.{average_expense(expenses):.2f}")
+
+    highest = highest_expense(expenses)
+    lowest = lowest_expense(expenses)
+    print(f"Highest expense: Rs.{highest['amount']:.2f} ({highest['category']} on {highest['date']})")
+    print(f"Lowest expense: Rs.{lowest['amount']:.2f} ({lowest['category']} on {lowest['date']})")
+
+    print("\nCategory-wise totals:")
+    category_totals = category_wise_summary(expenses)
+    for cat in category_totals:
+        print(f"  {cat:<15}: Rs.{category_totals[cat]:.2f}")
+
+    print("\nMonthly totals:")
+    month_totals = monthly_summary(expenses)
+    month_keys_sorted = sort_strings_ascending(list(month_totals.keys()))
+    for month in month_keys_sorted:
+        print(f"  {month}: Rs.{month_totals[month]:.2f}")
+
+    current_month = datetime.today().strftime("%Y-%m")
+    spent, over_budget = budget_alert(expenses, current_month)
+    print(f"\nThis month ({current_month}) spend: Rs.{spent:.2f}")
+    if over_budget:
+        print("WARNING: You have exceeded your monthly budget limit!")
+    else:
+        print("You are within your monthly budget limit.")
+
+    print("\nTop 3 highest expenses:")
+    top_expenses = top_n_expenses(expenses, 3)
+    for e in top_expenses:
+        print(f"  Rs.{e['amount']:.2f} - {e['category']} - {e['date']}")
+
+
+def print_menu():
+    print("  1. Add Expense")
+    print("  2. View All Expenses")
+    print("  3. Edit Expense")
+    print("  4. Delete Expense")
+    print("  5. View Analytics & Reports")
+    print("  6. Exit")
+
+
+def main_menu():
+    expenses = load_expenses()
+    log_action("START", f"loaded {len(expenses)} existing record(s)")
+
+    while True:
+        print_header("PERSONAL EXPENSE TRACKER")
+        print_menu()
+
+        choice = input("\nEnter your choice: ").strip()
+
+        if choice == "1":
+            handle_add(expenses)
+        elif choice == "2":
+            handle_view(expenses)
+        elif choice == "3":
+            handle_edit(expenses)
+        elif choice == "4":
+            handle_delete(expenses)
+        elif choice == "5":
+            handle_reports(expenses)
+        elif choice == "6":
+            log_action("EXIT", "user ended session")
+            print("\nGoodbye! Your data has been saved.")
+            break
+        else:
+            print("Invalid choice. Please try again.")
+
+
+if __name__ == "__main__":
+    main_menu()
